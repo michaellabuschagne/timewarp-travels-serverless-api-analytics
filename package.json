@@ -1,0 +1,15 @@
+{
+  "name": "aws-serverless-api-analytics",
+  "version": "1.0.0",
+  "description": "An AWS Serverless Project that showcases how a set of AWS Serverless Services can be used to create a Data Analytics Pipeline that feeds into a set QuickSight Dashboard to visualize AWS API Gateway usage",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.15.0",
+    "npm": ">=9.5.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Michael Labuschagne",
+  "license": "MIT"
+}
