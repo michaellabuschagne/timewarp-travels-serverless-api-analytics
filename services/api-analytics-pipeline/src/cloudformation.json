@@ -1,0 +1,1031 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TimeWarp-Travel's Public API Analytics Data Pipeline.",
+  "Parameters": {
+    "ExecutionLogsDataLakePrefix": {
+      "Type": "String",
+      "Description": "The data lake's S3 bucket prefix that holds the API execution log information.",
+      "AllowedPattern": "[a-z-]+"
+    },
+    "AccessLogsDataLakePrefix": {
+      "Type": "String",
+      "Description": "The data lake's S3 bucket prefix containing the API access log information.",
+      "AllowedPattern": "[a-z-]+"
+    },
+    "ExecutionLogsTableName": {
+      "Type": "String",
+      "Description": "The Glue catalog contains the data definition for the table that holds the API execution log information.",
+      "AllowedPattern": "[a-z_]+"
+    },
+    "AccessLogsTableName": {
+      "Type": "String",
+      "Description": "The Glue catalogue defines the data schema for the table that contains the API access log information.",
+      "AllowedPattern": "[a-z_]+"
+    },
+    "AnalyticsDatabaseName": {
+      "Type": "String",
+      "Description": "The name of the database that holds tables pertaining to the analytics schema.",
+      "AllowedPattern": "[a-z_]+"
+    },
+    "DataLakeBucketARN": {
+      "Description": "The Amazon Resource Name (ARN) for the S3 bucket containing the data lake.",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "DataLakeBucketName": {
+      "Description": "The name of the S3 bucket that contains the data lake.",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    }
+  },
+  "Resources": {
+    "KinesisDataFirehoseTransformLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": "./handlers/",
+        "Handler": "execution-logs-kinesis-transformer.index",
+        "Runtime": "nodejs18.x",
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "KinesisTransformExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 90
+      }
+    },
+    "AccessLogsKinesisTransformLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": "./handlers/",
+        "Handler": "access-logs-kinesis-transformer.index",
+        "Runtime": "nodejs18.x",
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "KinesisTransformExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 90
+      }
+    },
+    "KinesisTransformExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "kinesis-firehose-put-record-batch",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "firehose:PutRecordBatch"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "KinesisDataFirehoseDeliveryStreamLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": "/aws/kinesisfirehose/api-analytics-execution-logs"
+      }
+    },
+    "KinesisDataFirehoseDeliveryStreamLogStream": {
+      "Type": "AWS::Logs::LogStream",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "KinesisDataFirehoseDeliveryStreamLogGroup"
+        },
+        "LogStreamName": "S3Delivery"
+      }
+    },
+    "ExecutionLogsKinesisDeliveryStream": {
+      "Type": "AWS::KinesisFirehose::DeliveryStream",
+      "Properties": {
+        "DeliveryStreamType": "DirectPut",
+        "ExtendedS3DestinationConfiguration": {
+          "BucketARN": {
+            "Ref": "DataLakeBucketARN"
+          },
+          "BufferingHints": {
+            "IntervalInSeconds": 60,
+            "SizeInMBs": 5
+          },
+          "CloudWatchLoggingOptions": {
+            "Enabled": true,
+            "LogGroupName": {
+              "Ref": "KinesisDataFirehoseDeliveryStreamLogGroup"
+            },
+            "LogStreamName": "S3Delivery"
+          },
+          "CompressionFormat": "UNCOMPRESSED",
+          "DataFormatConversionConfiguration": {
+            "Enabled": false
+          },
+          "EncryptionConfiguration": {
+            "NoEncryptionConfig": "NoEncryption"
+          },
+          "ErrorOutputPrefix": {
+            "Fn::Sub": [
+              "${executionLogsDataLakePrefix}/firehose-error/",
+              {
+                "executionLogsDataLakePrefix": {
+                  "Ref": "ExecutionLogsDataLakePrefix"
+                }
+              }
+            ]
+          },
+          "Prefix": {
+            "Fn::Sub": [
+              "${executionLogsDataLakePrefix}/",
+              {
+                "executionLogsDataLakePrefix": {
+                  "Ref": "ExecutionLogsDataLakePrefix"
+                }
+              }
+            ]
+          },
+          "ProcessingConfiguration": {
+            "Enabled": true,
+            "Processors": [
+              {
+                "Type": "Lambda",
+                "Parameters": [
+                  {
+                    "ParameterName": "LambdaArn",
+                    "ParameterValue": {
+                      "Fn::GetAtt": [
+                        "KinesisDataFirehoseTransformLambda",
+                        "Arn"
+                      ]
+                    }
+                  },
+                  {
+                    "ParameterName": "NumberOfRetries",
+                    "ParameterValue": "3"
+                  },
+                  {
+                    "ParameterName": "RoleArn",
+                    "ParameterValue": {
+                      "Fn::GetAtt": [
+                        "KinesisFireHoseDeliveryStreamRole",
+                        "Arn"
+                      ]
+                    }
+                  },
+                  {
+                    "ParameterName": "BufferSizeInMBs",
+                    "ParameterValue": "3"
+                  },
+                  {
+                    "ParameterName": "BufferIntervalInSeconds",
+                    "ParameterValue": "60"
+                  }
+                ]
+              }
+            ]
+          },
+          "RoleARN": {
+            "Fn::GetAtt": [
+              "KinesisFireHoseDeliveryStreamRole",
+              "Arn"
+            ]
+          },
+          "S3BackupMode": "Disabled"
+        }
+      }
+    },
+    "KinesisDeliveryStreamParam": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": "/product/analytics/execution-logs/kinesis-delivery-stream-arn",
+        "Type": "String",
+        "Value": {
+          "Fn::GetAtt": [
+            "ExecutionLogsKinesisDeliveryStream",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "AccessLogsKinesisLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": "/aws/kinesisfirehose/api-analytics-access-logs"
+      }
+    },
+    "AccessLogsKinesisLogStream": {
+      "Type": "AWS::Logs::LogStream",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "AccessLogsKinesisLogGroup"
+        },
+        "LogStreamName": "S3Delivery"
+      }
+    },
+    "AccessLogsKinesisDeliveryStream": {
+      "Type": "AWS::KinesisFirehose::DeliveryStream",
+      "Properties": {
+        "DeliveryStreamType": "DirectPut",
+        "ExtendedS3DestinationConfiguration": {
+          "BucketARN": {
+            "Ref": "DataLakeBucketARN"
+          },
+          "BufferingHints": {
+            "IntervalInSeconds": 60,
+            "SizeInMBs": 5
+          },
+          "CloudWatchLoggingOptions": {
+            "Enabled": true,
+            "LogGroupName": {
+              "Ref": "AccessLogsKinesisLogGroup"
+            },
+            "LogStreamName": "S3Delivery"
+          },
+          "CompressionFormat": "UNCOMPRESSED",
+          "DataFormatConversionConfiguration": {
+            "Enabled": false
+          },
+          "EncryptionConfiguration": {
+            "NoEncryptionConfig": "NoEncryption"
+          },
+          "ErrorOutputPrefix": {
+            "Fn::Sub": [
+              "${accessLogsDataLakePrefix}/firehose-error/",
+              {
+                "accessLogsDataLakePrefix": {
+                  "Ref": "AccessLogsDataLakePrefix"
+                }
+              }
+            ]
+          },
+          "Prefix": {
+            "Fn::Sub": [
+              "${accessLogsDataLakePrefix}/",
+              {
+                "accessLogsDataLakePrefix": {
+                  "Ref": "AccessLogsDataLakePrefix"
+                }
+              }
+            ]
+          },
+          "ProcessingConfiguration": {
+            "Enabled": true,
+            "Processors": [
+              {
+                "Type": "Lambda",
+                "Parameters": [
+                  {
+                    "ParameterName": "LambdaArn",
+                    "ParameterValue": {
+                      "Fn::GetAtt": [
+                        "AccessLogsKinesisTransformLambda",
+                        "Arn"
+                      ]
+                    }
+                  },
+                  {
+                    "ParameterName": "NumberOfRetries",
+                    "ParameterValue": "3"
+                  },
+                  {
+                    "ParameterName": "RoleArn",
+                    "ParameterValue": {
+                      "Fn::GetAtt": [
+                        "KinesisFireHoseDeliveryStreamRole",
+                        "Arn"
+                      ]
+                    }
+                  },
+                  {
+                    "ParameterName": "BufferSizeInMBs",
+                    "ParameterValue": "3"
+                  },
+                  {
+                    "ParameterName": "BufferIntervalInSeconds",
+                    "ParameterValue": "60"
+                  }
+                ]
+              }
+            ]
+          },
+          "RoleARN": {
+            "Fn::GetAtt": [
+              "KinesisFireHoseDeliveryStreamRole",
+              "Arn"
+            ]
+          },
+          "S3BackupMode": "Disabled"
+        }
+      }
+    },
+    "AccessLogsKinesisDeliveryStreamParam": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": "/product/analytics/access-logs/kinesis-delivery-stream-arn",
+        "Type": "String",
+        "Value": {
+          "Fn::GetAtt": [
+            "AccessLogsKinesisDeliveryStream",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "KinesisFireHoseDeliveryStreamRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "firehose.amazonaws.com"
+                ]
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "kinesis-firehose-delivery-stream",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:AbortMultipartUpload",
+                    "s3:GetBucketLocation",
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:ListBucketMultipartUploads",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": [
+                        "arn:${AWS::Partition}:s3:::${dataLakeS3BucketName}",
+                        {
+                          "dataLakeS3BucketName": {
+                            "Ref": "DataLakeBucketName"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "Fn::Sub": [
+                        "arn:${AWS::Partition}:s3:::${dataLakeS3BucketName}/*",
+                        {
+                          "dataLakeS3BucketName": {
+                            "Ref": "DataLakeBucketName"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction",
+                    "lambda:GetFunctionConfiguration"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "KinesisDataFirehoseTransformLambda",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "AccessLogsKinesisTransformLambda",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "KinesisDataFirehoseDeliveryStreamLogGroup",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "AccessLogsKinesisLogGroup",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CloudWatchLogsToKinesisFirehoseRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "logs.us-east-1.amazonaws.com"
+                ]
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "cloudwatch-to-firehose",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "firehose:*"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "ExecutionLogsKinesisDeliveryStream",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "AccessLogsKinesisDeliveryStream",
+                        "Arn"
+                      ]
+                    }
+
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CloudWatchLogsToKinesisFirehoseRoleParam": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": "/product/analytics/cloudwatch-kinesis-role-arn",
+        "Type": "String",
+        "Value": {
+          "Fn::GetAtt": [
+            "CloudWatchLogsToKinesisFirehoseRole",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "ProductAnalyticsDatabase": {
+      "Type": "AWS::Glue::Database",
+      "Properties": {
+        "CatalogId": {
+          "Ref": "AWS::AccountId"
+        },
+        "DatabaseInput": {
+          "Description": "Database which holds analytics tables for TimeWarp-Travel's Product",
+          "Name": {
+            "Ref": "AnalyticsDatabaseName"
+          }
+        }
+      }
+    },
+    "ProductAnalyticsDatabaseNameParam": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": "/product/analytics/database-name",
+        "Type": "String",
+        "Value": {
+          "Ref": "ProductAnalyticsDatabase"
+        }
+      }
+    },
+    "ApiAnalyticsTable": {
+      "Type": "AWS::Glue::Table",
+      "Properties": {
+        "CatalogId": {
+          "Ref": "AWS::AccountId"
+        },
+        "DatabaseName": {
+          "Ref": "ProductAnalyticsDatabase"
+        },
+        "TableInput": {
+          "Description": "REST API Execution Logs",
+          "Name": {
+            "Ref": "ExecutionLogsTableName"
+          },
+          "Parameters": {
+            "EXTERNAL": "TRUE",
+            "classification": "json",
+            "compressionType": "none",
+            "projection.datehour.format": "yyyy/MM/dd/HH",
+            "projection.datehour.interval": "1",
+            "projection.datehour.interval.unit": "HOURS",
+            "projection.datehour.range": "2021/01/01/00,NOW",
+            "projection.datehour.type": "date",
+            "projection.enabled": "true",
+            "recordCount": "250",
+            "sizeKey": "31297",
+            "storage.location.template": {
+              "Fn::Sub": [
+                "s3://${dataLakeS3BucketName}/${execLogsDataLakePath}/${!datehour}",
+                {
+                  "dataLakeS3BucketName": {
+                    "Ref": "DataLakeBucketName"
+                  },
+                  "execLogsDataLakePath": {"Ref": "ExecutionLogsDataLakePrefix"}
+                }
+              ]
+            },
+            "typeOfData": "file"
+          },
+          "PartitionKeys": [
+            {
+              "Name": "datehour",
+              "Type": "string"
+            }
+          ],
+          "StorageDescriptor": {
+            "Columns": [
+              {
+                "Name": "requestid",
+                "Type": "string",
+                "Comment": "from deserializer"
+              },
+              {
+                "Name": "querystring",
+                "Type": "map<string,string>",
+                "Comment": "from deserializer"
+              }
+            ],
+            "Compressed": false,
+            "InputFormat": "org.apache.hadoop.mapred.TextInputFormat",
+            "Location": {
+              "Fn::Sub": [
+                "s3://${dataLakeS3BucketName}/${execLogsDataLakePath}",
+                {
+                  "dataLakeS3BucketName": {
+                    "Ref": "DataLakeBucketName"
+                  },
+                  "execLogsDataLakePath": {"Ref": "ExecutionLogsDataLakePrefix"}
+                }
+              ]
+            },
+            "OutputFormat": "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
+            "SerdeInfo": {
+              "SerializationLibrary": "org.openx.data.jsonserde.JsonSerDe",
+              "Parameters": {
+                "paths": "queryString,requestId",
+                "serialization.format": "1"
+              }
+            }
+          },
+          "TableType": "EXTERNAL_TABLE"
+        }
+      }
+    },
+    "AccessLogsTable": {
+      "Type": "AWS::Glue::Table",
+      "Properties": {
+        "CatalogId": {
+          "Ref": "AWS::AccountId"
+        },
+        "DatabaseName": {
+          "Ref": "ProductAnalyticsDatabase"
+        },
+        "TableInput": {
+          "Description": "REST API Access Logs",
+          "Name": {
+            "Ref": "AccessLogsTableName"
+          },
+          "Parameters": {
+            "EXTERNAL": "TRUE",
+            "classification": "json",
+            "compressionType": "none",
+            "projection.datehour.format": "yyyy/MM/dd/HH",
+            "projection.datehour.interval": "1",
+            "projection.datehour.interval.unit": "HOURS",
+            "projection.datehour.range": "2021/01/01/00,NOW",
+            "projection.datehour.type": "date",
+            "projection.enabled": "true",
+            "storage.location.template": {
+              "Fn::Sub": [
+                "s3://${dataLakeS3BucketName}/${accessLogsDataLakePath}/${!datehour}",
+                {
+                  "dataLakeS3BucketName": {
+                    "Ref": "DataLakeBucketName"
+                  },
+                  "accessLogsDataLakePath": {"Ref": "AccessLogsDataLakePrefix"}
+                }
+              ]
+            },
+            "typeOfData": "file"
+          },
+          "PartitionKeys": [
+            {
+              "Name": "datehour",
+              "Type": "string"
+            }
+          ],
+          "StorageDescriptor": {
+            "Columns": [
+              {
+                "Name": "requestid",
+                "Type": "string"
+              },
+              {
+                "Name": "accountid",
+                "Type": "string"
+              },
+              {
+                "Name": "httpstatuscode",
+                "Type": "string"
+              },
+              {
+                "Name": "apiid",
+                "Type": "string"
+              },
+              {
+                "Name": "domainname",
+                "Type": "string"
+              },
+              {
+                "Name": "extendedrequestid",
+                "Type": "string"
+              },
+              {
+                "Name": "httpmethod",
+                "Type": "string"
+              },
+              {
+                "Name": "resourcepath",
+                "Type": "string"
+              },
+              {
+                "Name": "protocol",
+                "Type": "string"
+              },
+              {
+                "Name": "requesttimeepoch",
+                "Type": "bigint"
+              },
+              {
+                "Name": "stage",
+                "Type": "string"
+              },
+              {
+                "Name": "responselatency",
+                "Type": "bigint"
+              },
+              {
+                "Name": "responselength",
+                "Type": "string"
+              },
+              {
+                "Name": "xraytraceid",
+                "Type": "string"
+              },
+              {
+                "Name": "webaclarn",
+                "Type": "string"
+              },
+              {
+                "Name": "authorizer",
+                "Type": "struct<principalId:string,error:string,latency:string,requestId:string,status:string>"
+              },
+              {
+                "Name": "authorize",
+                "Type": "struct<error:string,latency:string,status:string>"
+              },
+              {
+                "Name": "error",
+                "Type": "struct<errorMessage:string,errorResponseType:string>"
+              },
+              {
+                "Name": "identity",
+                "Type": "struct<sourceIp:string,userAgent:string>"
+              },
+              {
+                "Name": "authenticate",
+                "Type": "struct<error:string,latency:string,status:string>"
+              },
+              {
+                "Name": "integration",
+                "Type": "struct<error:string,integrationStatus:string,latency:string,requestId:string,status:string>"
+              },
+              {
+                "Name": "waf",
+                "Type": "struct<error:string,latency:string,status:string,responseCode:string>"
+              }
+            ],
+            "Compressed": false,
+            "InputFormat": "org.apache.hadoop.mapred.TextInputFormat",
+            "Location": {
+              "Fn::Sub": [
+                "s3://${dataLakeS3BucketName}/${accessLogsDataLakePath}",
+                {
+                  "dataLakeS3BucketName": {
+                    "Ref": "DataLakeBucketName"
+                  },
+                  "accessLogsDataLakePath": {"Ref": "AccessLogsDataLakePrefix"}
+                }
+              ]
+            },
+            "OutputFormat": "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
+            "SerdeInfo": {
+              "SerializationLibrary": "org.openx.data.jsonserde.JsonSerDe",
+              "Parameters": {
+                "paths": "accountId,apiId,authenticate,authorize,authorizer,domainName,error,extendedRequestId,httpMethod,httpStatusCode,identity,integration,protocol,requestId,requestTimeEpoch,resourcePath,responseLatency,responseLength,stage,waf,webaclArn,xrayTraceId",
+                "serialization.format": "1"
+              }
+            }
+          },
+          "TableType": "EXTERNAL_TABLE"
+        }
+      }
+    },
+    "ApiAnalyticsView": {
+      "Type": "AWS::Glue::Table",
+      "Properties": {
+        "CatalogId": {
+          "Ref": "AWS::AccountId"
+        },
+        "DatabaseName": {
+          "Ref": "ProductAnalyticsDatabase"
+        },
+        "TableInput": {
+          "Description": "API Analytics data view which flattens data from the access logs and executions logs table using a group by requedId",
+          "Name": "api_analytics_view",
+          "Parameters": {
+            "comment": "Presto View",
+            "presto_view": "true"
+          },
+          "StorageDescriptor": {
+            "Columns": [
+              {
+                "Name": "requestid",
+                "Type": "string"
+              },
+              {
+                "Name": "requesttimeepoch",
+                "Type": "bigint"
+              },
+              {
+                "Name": "httpmethod",
+                "Type": "string"
+              },
+              {
+                "Name": "resourcepath",
+                "Type": "string"
+              },
+              {
+                "Name": "sourceip",
+                "Type": "string"
+              },
+              {
+                "Name": "useragent",
+                "Type": "string"
+              },
+              {
+                "Name": "id_parameter",
+                "Type": "string"
+              },
+              {
+                "Name": "curtailment_parameter",
+                "Type": "string"
+              },
+              {
+                "Name": "prediction_parameter",
+                "Type": "string"
+              },
+              {
+                "Name": "querystring",
+                "Type": "map<string,string>"
+              },
+              {
+                "Name": "principalid",
+                "Type": "string"
+              },
+              {
+                "Name": "responselatency",
+                "Type": "bigint"
+              },
+              {
+                "Name": "httpstatuscode",
+                "Type": "string"
+              },
+              {
+                "Name": "datehour",
+                "Type": "string"
+              },
+              {
+                "Name": "domainname",
+                "Type": "string"
+              }
+            ],
+            "Location": "",
+            "Compressed": false,
+            "NumberOfBuckets": 0,
+            "SerdeInfo": {},
+            "SortColumns": [],
+            "StoredAsSubDirectories": false
+          },
+          "TableType": "VIRTUAL_VIEW",
+          "ViewExpandedText": "/* Presto View */",
+          "ViewOriginalText": {
+            "Fn::Sub": [
+              "/* Presto View: ${viewQueryString} */",
+              {
+                "viewQueryString": {
+                  "Fn::Base64": {
+                    "Fn::Sub": [
+                      "{\"originalSql\":\"SELECT  a.requestid, requesttimeepoch, httpmethod, resourcepath, identity.sourceip, identity.useragent, \\\"element_at\\\"(querystring, 'id') id_parameter, \\\"element_at\\\"(querystring, 'curtailment') curtailment_parameter, \\\"element_at\\\"(querystring, 'prediction') prediction_parameter, querystring, authorizer.principalid, responselatency, httpstatuscode, a.datehour, domainname FROM  (${accessLogsTableName} a LEFT JOIN ${executionLogsTableName} e ON (a.requestid = e.requestid))\",\"catalog\":\"awsdatacatalog\",\"schema\":\"${analyticsDatabaseName}\",\"columns\":[{\"name\":\"requestid\",\"type\":\"varchar\"},{\"name\":\"requesttimeepoch\",\"type\":\"bigint\"},{\"name\":\"httpmethod\",\"type\":\"varchar\"},{\"name\":\"resourcepath\",\"type\":\"varchar\"},{\"name\":\"sourceip\",\"type\":\"varchar\"},{\"name\":\"useragent\",\"type\":\"varchar\"},{\"name\":\"id_parameter\",\"type\":\"varchar\"},{\"name\":\"curtailment_parameter\",\"type\":\"varchar\"},{\"name\":\"prediction_parameter\",\"type\":\"varchar\"},{\"name\":\"querystring\",\"type\":\"map(varchar,varchar)\"},{\"name\":\"principalid\",\"type\":\"varchar\"},{\"name\":\"responselatency\",\"type\":\"bigint\"},{\"name\":\"httpstatuscode\",\"type\":\"varchar\"},{\"name\":\"datehour\",\"type\":\"varchar\"},{\"name\":\"domainname\",\"type\":\"varchar\"}]}",
+                      {
+                        "executionLogsTableName": {
+                          "Ref": "ExecutionLogsTableName"
+                        },
+                        "accessLogsTableName": {
+                          "Ref": "AccessLogsTableName"
+                        },
+                        "analyticsDatabaseName": {
+                          "Ref": "ProductAnalyticsDatabase"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "LogGroupSubscriptionFilterSubscriberLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": "./handlers/",
+        "Handler": "restapi-logs-subscriber.index",
+        "Runtime": "nodejs18.x",
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "LogGroupSubscriptionFilterSubscriberExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 180
+      }
+    },
+    "LogGroupSubscriptionFilterSubscriberExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "get-ssm-params",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "cloudwatch-logs-read-subscribe",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:DescribeLogGroups",
+                    "logs:DescribeSubscriptionFilters",
+                    "logs:PutSubscriptionFilter"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "create-cloudwatch-rule",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:PassRole"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "CloudWatchLogsToKinesisFirehoseRole",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "LogSubscriptionFilterAutoSubscribeScheduledRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Automatically subscribe REST API execution log groups to API Analytics filter on a daily basis",
+        "ScheduleExpression": "rate(1 day)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": { "Fn::GetAtt": ["LogGroupSubscriptionFilterSubscriberLambda", "Arn"] },
+            "Id": "AutoSubscribeApiGatewayLogGroups"
+          }
+        ]
+      }
+    },
+    "PermissionForEventsToInvokeLambda": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": { "Ref": "LogGroupSubscriptionFilterSubscriberLambda" },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": { "Fn::GetAtt": ["LogSubscriptionFilterAutoSubscribeScheduledRule", "Arn"] }
+      }
+    }
+  }
+}

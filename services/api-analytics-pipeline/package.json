@@ -1,0 +1,61 @@
+{
+  "name": "@timewarp-travels/api-data-analytics",
+  "version": "1.0.0",
+  "description": "API Data Analytics Infra Stack",
+  "main": "index.js",
+  "scripts": {
+    "clean": "rimraf build",
+    "build": "webpack",
+    "package-cfn": "bash ../../scripts/package_cfn.sh",
+    "predeploy": "npm run clean && npm run build && npm run package-cfn",
+    "deploy": "bash ../../scripts/deploy_cfn.sh ExecutionLogsDataLakePrefix EXECUTION_LOGS_DATA_LAKE_PREFIX ExecutionLogsTableName EXECUTION_LOGS_TABLE_NAME AnalyticsDatabaseName ANALYTICS_DATABASE_NAME AccessLogsDataLakePrefix ACCESS_LOGS_DATA_LAKE_PREFIX AccessLogsTableName ACCESS_LOGS_TABLE_NAME DataLakeBucketARN DATA_LAKE_BUCKET_ARN DataLakeBucketName DATA_LAKE_BUCKET_NAME AnalyticsDatabaseName ANALYTICS_DATABASE_NAME",
+    "test:mocha": "mocha tests/**/*.test.js --timeout 0 --require @babel/register",
+    "test:mocha-watch": "npm run test:mocha -- -w",
+    "test": "npm run test:mocha",
+    "lint:check": "eslint . --ext=js",
+    "lint:fix": "eslint . --ext=js --fix"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.21.4",
+    "@babel/eslint-parser": "^7.21.3",
+    "@babel/plugin-transform-runtime": "^7.21.4",
+    "@babel/preset-env": "^7.21.4",
+    "@babel/register": "^7.21.0",
+    "babel-loader": "^9.1.2",
+    "babel-plugin-source-map-support": "^2.2.0",
+    "chai": "^4.3.7",
+    "copy-webpack-plugin": "^11.0.0",
+    "deep-equal-in-any-order": "^2.0.6",
+    "eslint-plugin-jest": "^27.2.1",
+    "eslint-plugin-no-only-tests": "^3.1.0",
+    "json-ast": "^2.1.7",
+    "mocha": "^10.2.0",
+    "node-loader": "^2.0.0",
+    "rimraf": "^4.4.1",
+    "sinon-chai": "^3.7.0",
+    "source-map-support": "^0.5.21",
+    "webpack": "^5.78.0",
+    "webpack-cli": "^5.0.1"
+  },
+  "optionalDependencies": {
+    "eslint-config-prettier": "^6.7.0",
+    "eslint-plugin-prettier": "^3.1.2",
+    "prettier": "^1.19.1"
+  },
+  "keywords": [],
+  "author": "Michael Labuschagne",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:michaellabuschagne/timewarp-travels-serverless-api-analytics.git"
+  },
+  "lint-staged": {
+    "*.js": "eslint --cache --fix"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.309.0",
+    "@aws-sdk/client-firehose": "^3.309.0",
+    "@aws-sdk/client-kinesis": "^3.309.0",
+    "@aws-sdk/client-ssm": "^3.309.0"
+  }
+}
