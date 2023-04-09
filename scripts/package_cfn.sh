@@ -17,16 +17,8 @@ if [ "${DEBUG:-false}" = "true" ]; then
   set -x
 fi
 
-# Delete the build directory if it exists, then create a new one
-BUILD_DIR="$(pwd)/build"
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
-
-# Copy the contents of the src directory to the build directory
-cp -r "$(pwd)/src"/* "$BUILD_DIR"
-
 # Use the AWS CLI to perform a cloudformation package
 aws cloudformation package \
-  --template-file "$BUILD_DIR/cloudformation.json" \
+  --template-file "build/cloudformation.json" \
   --s3-bucket "$CLOUDFORMATION_S3_BUCKET" \
-  --output-template-file "$BUILD_DIR/cloudformation.yaml"
+  --output-template-file "build/cloudformation.yaml"
