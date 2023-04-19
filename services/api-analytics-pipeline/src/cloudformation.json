@@ -152,24 +152,10 @@
             "NoEncryptionConfig": "NoEncryption"
           },
           "ErrorOutputPrefix": {
-            "Fn::Sub": [
-              "${executionLogsDataLakePrefix}/firehose-error/",
-              {
-                "executionLogsDataLakePrefix": {
-                  "Ref": "ExecutionLogsDataLakePrefix"
-                }
-              }
-            ]
+            "Fn::Sub": "${ExecutionLogsDataLakePrefix}/firehose-error/"
           },
           "Prefix": {
-            "Fn::Sub": [
-              "${executionLogsDataLakePrefix}/",
-              {
-                "executionLogsDataLakePrefix": {
-                  "Ref": "ExecutionLogsDataLakePrefix"
-                }
-              }
-            ]
+            "Fn::Sub": "${ExecutionLogsDataLakePrefix}/"
           },
           "ProcessingConfiguration": {
             "Enabled": true,
@@ -278,24 +264,10 @@
             "NoEncryptionConfig": "NoEncryption"
           },
           "ErrorOutputPrefix": {
-            "Fn::Sub": [
-              "${accessLogsDataLakePrefix}/firehose-error/",
-              {
-                "accessLogsDataLakePrefix": {
-                  "Ref": "AccessLogsDataLakePrefix"
-                }
-              }
-            ]
+            "Fn::Sub": "${AccessLogsDataLakePrefix}/firehose-error/"
           },
           "Prefix": {
-            "Fn::Sub": [
-              "${accessLogsDataLakePrefix}/",
-              {
-                "accessLogsDataLakePrefix": {
-                  "Ref": "AccessLogsDataLakePrefix"
-                }
-              }
-            ]
+            "Fn::Sub": "${AccessLogsDataLakePrefix}/"
           },
           "ProcessingConfiguration": {
             "Enabled": true,
@@ -395,24 +367,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": [
-                        "arn:${AWS::Partition}:s3:::${dataLakeS3BucketName}",
-                        {
-                          "dataLakeS3BucketName": {
-                            "Ref": "DataLakeBucketName"
-                          }
-                        }
-                      ]
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${DataLakeBucketName}"
                     },
                     {
-                      "Fn::Sub": [
-                        "arn:${AWS::Partition}:s3:::${dataLakeS3BucketName}/*",
-                        {
-                          "dataLakeS3BucketName": {
-                            "Ref": "DataLakeBucketName"
-                          }
-                        }
-                      ]
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${DataLakeBucketName}/*"
                     }
                   ]
                 },
@@ -577,15 +535,7 @@
             "recordCount": "250",
             "sizeKey": "31297",
             "storage.location.template": {
-              "Fn::Sub": [
-                "s3://${dataLakeS3BucketName}/${execLogsDataLakePath}/${!datehour}",
-                {
-                  "dataLakeS3BucketName": {
-                    "Ref": "DataLakeBucketName"
-                  },
-                  "execLogsDataLakePath": {"Ref": "ExecutionLogsDataLakePrefix"}
-                }
-              ]
+              "Fn::Sub": "s3://${DataLakeBucketName}/${ExecutionLogsDataLakePrefix}/${!datehour}"
             },
             "typeOfData": "file"
           },
@@ -611,15 +561,7 @@
             "Compressed": false,
             "InputFormat": "org.apache.hadoop.mapred.TextInputFormat",
             "Location": {
-              "Fn::Sub": [
-                "s3://${dataLakeS3BucketName}/${execLogsDataLakePath}",
-                {
-                  "dataLakeS3BucketName": {
-                    "Ref": "DataLakeBucketName"
-                  },
-                  "execLogsDataLakePath": {"Ref": "ExecutionLogsDataLakePrefix"}
-                }
-              ]
+              "Fn::Sub": "s3://${DataLakeBucketName}/${ExecutionLogsDataLakePrefix}"
             },
             "OutputFormat": "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
             "SerdeInfo": {
@@ -659,15 +601,7 @@
             "projection.datehour.type": "date",
             "projection.enabled": "true",
             "storage.location.template": {
-              "Fn::Sub": [
-                "s3://${dataLakeS3BucketName}/${accessLogsDataLakePath}/${!datehour}",
-                {
-                  "dataLakeS3BucketName": {
-                    "Ref": "DataLakeBucketName"
-                  },
-                  "accessLogsDataLakePath": {"Ref": "AccessLogsDataLakePrefix"}
-                }
-              ]
+              "Fn::Sub": "s3://${DataLakeBucketName}/${AccessLogsDataLakePrefix}/${!datehour}"
             },
             "typeOfData": "file"
           },
@@ -771,15 +705,7 @@
             "Compressed": false,
             "InputFormat": "org.apache.hadoop.mapred.TextInputFormat",
             "Location": {
-              "Fn::Sub": [
-                "s3://${dataLakeS3BucketName}/${accessLogsDataLakePath}",
-                {
-                  "dataLakeS3BucketName": {
-                    "Ref": "DataLakeBucketName"
-                  },
-                  "accessLogsDataLakePath": {"Ref": "AccessLogsDataLakePrefix"}
-                }
-              ]
+              "Fn::Sub": "s3://${DataLakeBucketName}/${AccessLogsDataLakePrefix}"
             },
             "OutputFormat": "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
             "SerdeInfo": {
@@ -837,15 +763,15 @@
                 "Type": "string"
               },
               {
-                "Name": "id_parameter",
+                "Name": "deal_code_parameter",
                 "Type": "string"
               },
               {
-                "Name": "curtailment_parameter",
+                "Name": "date_start_parameter",
                 "Type": "string"
               },
               {
-                "Name": "prediction_parameter",
+                "Name": "date_end_parameter",
                 "Type": "string"
               },
               {
@@ -889,7 +815,7 @@
                 "viewQueryString": {
                   "Fn::Base64": {
                     "Fn::Sub": [
-                      "{\"originalSql\":\"SELECT  a.requestid, requesttimeepoch, httpmethod, resourcepath, identity.sourceip, identity.useragent, \\\"element_at\\\"(querystring, 'id') id_parameter, \\\"element_at\\\"(querystring, 'curtailment') curtailment_parameter, \\\"element_at\\\"(querystring, 'prediction') prediction_parameter, querystring, authorizer.principalid, responselatency, httpstatuscode, a.datehour, domainname FROM  (${accessLogsTableName} a LEFT JOIN ${executionLogsTableName} e ON (a.requestid = e.requestid))\",\"catalog\":\"awsdatacatalog\",\"schema\":\"${analyticsDatabaseName}\",\"columns\":[{\"name\":\"requestid\",\"type\":\"varchar\"},{\"name\":\"requesttimeepoch\",\"type\":\"bigint\"},{\"name\":\"httpmethod\",\"type\":\"varchar\"},{\"name\":\"resourcepath\",\"type\":\"varchar\"},{\"name\":\"sourceip\",\"type\":\"varchar\"},{\"name\":\"useragent\",\"type\":\"varchar\"},{\"name\":\"id_parameter\",\"type\":\"varchar\"},{\"name\":\"curtailment_parameter\",\"type\":\"varchar\"},{\"name\":\"prediction_parameter\",\"type\":\"varchar\"},{\"name\":\"querystring\",\"type\":\"map(varchar,varchar)\"},{\"name\":\"principalid\",\"type\":\"varchar\"},{\"name\":\"responselatency\",\"type\":\"bigint\"},{\"name\":\"httpstatuscode\",\"type\":\"varchar\"},{\"name\":\"datehour\",\"type\":\"varchar\"},{\"name\":\"domainname\",\"type\":\"varchar\"}]}",
+                      "{\"originalSql\":\"SELECT  a.requestid, requesttimeepoch, httpmethod, resourcepath, identity.sourceip, identity.useragent, \\\"element_at\\\"(querystring, 'deal_code') deal_code_parameter, \\\"element_at\\\"(querystring, 'date_start') date_start_parameter, \\\"element_at\\\"(querystring, 'date_end_parameter') date_end_parameter_parameter, querystring, authorizer.principalid, responselatency, httpstatuscode, a.datehour, domainname FROM  (${accessLogsTableName} a LEFT JOIN ${executionLogsTableName} e ON (a.requestid = e.requestid))\",\"catalog\":\"awsdatacatalog\",\"schema\":\"${analyticsDatabaseName}\",\"columns\":[{\"name\":\"requestid\",\"type\":\"varchar\"},{\"name\":\"requesttimeepoch\",\"type\":\"bigint\"},{\"name\":\"httpmethod\",\"type\":\"varchar\"},{\"name\":\"resourcepath\",\"type\":\"varchar\"},{\"name\":\"sourceip\",\"type\":\"varchar\"},{\"name\":\"useragent\",\"type\":\"varchar\"},{\"name\":\"deal_code_parameter\",\"type\":\"varchar\"},{\"name\":\"date_start_parameter\",\"type\":\"varchar\"},{\"name\":\"date_end_parameter\",\"type\":\"varchar\"},{\"name\":\"querystring\",\"type\":\"map(varchar,varchar)\"},{\"name\":\"principalid\",\"type\":\"varchar\"},{\"name\":\"responselatency\",\"type\":\"bigint\"},{\"name\":\"httpstatuscode\",\"type\":\"varchar\"},{\"name\":\"datehour\",\"type\":\"varchar\"},{\"name\":\"domainname\",\"type\":\"varchar\"}]}",
                       {
                         "executionLogsTableName": {
                           "Ref": "ExecutionLogsTableName"

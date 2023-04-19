@@ -11,5 +11,11 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Michael Labuschagne",
-  "license": "MIT"
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "lerna": "^6.6.1"
+  }
 }
