@@ -1,0 +1,33 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Data Lake S3 bucket",
+  "Resources": {
+    "S3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain"
+    },
+    "S3BucketArnParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": "/timewarp-travels/data-lake/s3-bucket-arn",
+        "Type": "String",
+        "Value": {
+          "Fn::GetAtt": [
+            "S3Bucket",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "S3BucketNameParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": "/timewarp-travels/data-lake/s3-bucket-name",
+        "Type": "String",
+        "Value": {
+          "Ref": "S3Bucket"
+        }
+      }
+    }
+  }
+}
