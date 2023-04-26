@@ -1,0 +1,17 @@
+"BookingsApiStage": {
+  "Type": "AWS::ApiGateway::Stage",
+  "Properties": {
+    ...
+    "AccessLogSetting": {
+      "DestinationArn": { "Fn::GetAtt": "ApiLogGroup.Arn" },
+      "Format": "{\"requestId\":\"$context.requestId\",...}"
+    },
+    "MethodSettings": [
+      {
+        "HttpMethod": "*",
+        "LoggingLevel": "INFO",
+        "ResourcePath": "/*"
+      }
+    ]
+  }
+}

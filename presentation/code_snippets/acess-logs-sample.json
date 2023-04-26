@@ -1,0 +1,17 @@
+{
+  "requestId": "50527226-a00f-43f7-a75b-07ae7933b3b1",
+  "httpStatusCode": 200,
+  "domainName": "apis.timewarp-travels.com",
+  "httpMethod": "GET",
+  "resourcePath": "/v1/bookings",
+  "requestTimeEpoch": 1681849576144,
+  "responseLatency": 592,
+  "authorizer": {
+      "principalId": "7d29e138-3eb1-4c21-84c7-fdcacd1c412c",
+      "status": "200"
+  },
+  "identity": {
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+  },
+  ...
+}

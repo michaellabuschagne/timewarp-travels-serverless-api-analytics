@@ -1,0 +1,48 @@
+CREATE EXTERNAL TABLE `api_gateway_access_logs`(
+  `requestid` string COMMENT 'from deserializer', 
+  `accountid` string COMMENT 'from deserializer', 
+  `httpstatuscode` string COMMENT 'from deserializer', 
+  `apiid` string COMMENT 'from deserializer', 
+  `domainname` string COMMENT 'from deserializer', 
+  `extendedrequestid` string COMMENT 'from deserializer', 
+  `httpmethod` string COMMENT 'from deserializer', 
+  `resourcepath` string COMMENT 'from deserializer', 
+  `protocol` string COMMENT 'from deserializer', 
+  `requesttimeepoch` bigint COMMENT 'from deserializer', 
+  `stage` string COMMENT 'from deserializer', 
+  `responselatency` bigint COMMENT 'from deserializer', 
+  `responselength` string COMMENT 'from deserializer', 
+  `xraytraceid` string COMMENT 'from deserializer', 
+  `webaclarn` string COMMENT 'from deserializer', 
+  `authorizer` struct<principalid:string,error:string,latency:string,requestid:string,status:string> COMMENT 'from deserializer', 
+  `authorize` struct<error:string,latency:string,status:string> COMMENT 'from deserializer', 
+  `error` struct<errormessage:string,errorresponsetype:string> COMMENT 'from deserializer', 
+  `identity` struct<sourceip:string,useragent:string> COMMENT 'from deserializer', 
+  `authenticate` struct<error:string,latency:string,status:string> COMMENT 'from deserializer', 
+  `integration` struct<error:string,integrationstatus:string,latency:string,requestid:string,status:string> COMMENT 'from deserializer', 
+  `waf` struct<error:string,latency:string,status:string,responsecode:string> COMMENT 'from deserializer')
+PARTITIONED BY ( 
+  `datehour` string)
+ROW FORMAT SERDE 
+  'org.openx.data.jsonserde.JsonSerDe' 
+WITH SERDEPROPERTIES ( 
+  'paths'='accountId,apiId,authenticate,authorize,authorizer,domainName,error,extendedRequestId,httpMethod,httpStatusCode,identity,integration,protocol,requestId,requestTimeEpoch,resourcePath,responseLatency,responseLength,stage,waf,webaclArn,xrayTraceId') 
+STORED AS INPUTFORMAT 
+  'org.apache.hadoop.mapred.TextInputFormat' 
+OUTPUTFORMAT 
+  'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+LOCATION
+  's3://data-lake-us-east-1-123456789123/api-gateway-access-logs'
+TBLPROPERTIES (
+  'classification'='json', 
+  'compressionType'='none', 
+  'projection.datehour.format'='yyyy/MM/dd/HH', 
+  'projection.datehour.interval'='1', 
+  'projection.datehour.interval.unit'='HOURS', 
+  'projection.datehour.range'='2021/01/01/00,NOW', 
+  'projection.datehour.type'='date', 
+  'projection.enabled'='true', 
+  'storage.location.template'='s3://data-lake-us-east-1-123456789123/api-gateway-access-logs/${datehour}', 
+  'typeOfData'='file')
+
+

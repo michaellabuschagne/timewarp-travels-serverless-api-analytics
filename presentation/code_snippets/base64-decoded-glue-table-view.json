@@ -1,0 +1,67 @@
+{
+  "originalSql": "SELECT  a.requestid, requesttimeepoch, httpmethod, resourcepath, identity.sourceip, identity.useragent, \"element_at\"(querystring, 'deal_code') deal_code_parameter, \"element_at\"(querystring, 'date_start') date_start_parameter, \"element_at\"(querystring, 'date_end') date_end_parameter, querystring, authorizer.principalid, responselatency, httpstatuscode, a.datehour, domainname FROM  (api_gateway_access_logs a LEFT JOIN api_gateway_execution_logs e ON (a.requestid = e.requestid))",
+  "catalog": "awsdatacatalog",
+  "schema": "product_analytics",
+  "columns": [
+    {
+      "name": "requestid",
+      "type": "varchar"
+    },
+    {
+      "name": "requesttimeepoch",
+      "type": "bigint"
+    },
+    {
+      "name": "httpmethod",
+      "type": "varchar"
+    },
+    {
+      "name": "resourcepath",
+      "type": "varchar"
+    },
+    {
+      "name": "sourceip",
+      "type": "varchar"
+    },
+    {
+      "name": "useragent",
+      "type": "varchar"
+    },
+    {
+      "name": "deal_code_parameter",
+      "type": "varchar"
+    },
+    {
+      "name": "date_start_parameter",
+      "type": "varchar"
+    },
+    {
+      "name": "date_start_parameter",
+      "type": "varchar"
+    },
+    {
+      "name": "querystring",
+      "type": "map(varchar,varchar)"
+    },
+    {
+      "name": "principalid",
+      "type": "varchar"
+    },
+    {
+      "name": "responselatency",
+      "type": "bigint"
+    },
+    {
+      "name": "httpstatuscode",
+      "type": "varchar"
+    },
+    {
+      "name": "datehour",
+      "type": "varchar"
+    },
+    {
+      "name": "domainname",
+      "type": "varchar"
+    }
+  ]
+}
